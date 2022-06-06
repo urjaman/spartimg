@@ -80,3 +80,15 @@ void cclose(int fd) {
 	if (_close(fd) != 0)
 		perror("close");
 }
+
+void* cmalloc(unsigned len) {
+	void *p = malloc(len);
+	if (!p) oops("Out of memory.");
+	return p;
+}
+
+void* ccalloc(unsigned count, unsigned sizeeach) {
+	void *p = calloc(count,sizeeach);
+	if (!p) oops("Out of memory.");
+	return p;
+}

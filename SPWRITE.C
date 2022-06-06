@@ -76,6 +76,13 @@ void spm_readinit(int fd, struct spm_rm *r, struct spfmthdr *hdr)
 	cseek(fd, r->totalsect * 512UL, SEEK_SET);
 }
 
+void spm_finish(struct spm_rm *r) {
+	free(r->eb);
+	r->eb = NULL;
+	r->ebsize = 0;
+}
+
+
 struct spfmtentry* spm_next(int fd, struct spm_rm *r) {
 	const unsigned ebpersec = 512 / sizeof(struct spfmtentry);
 	unsigned secleft;
@@ -83,14 +90,16 @@ struct spfmtentry* spm_next(int fd, struct spm_rm *r) {
 	if (r->off < r->ebsize) {
 		struct spfmtentry *rv;
 		rv = &(r->eb[r->off]);
+		if ((rv->count == 0)&&(rv->lba == 0)) {
+			spm_finish(r);
+			return NULL;
+		}
 		r->off++;
 		return rv;
 	}
 	secleft = r->totalsect - r->eblba;
 	if (secleft <= SPMEB_MAXSECT) {
-		free(r->eb);
-		r->eb = NULL;
-		r->ebsize = 0;
+		spm_finish(r);
 		return NULL;
 	}
 	r->eblba += SPMEB_MAXSECT;
@@ -298,7 +307,7 @@ int main(int argc, char**argv)
 	cclose(rfd);
 
 	if ((drive >= 0)&&(img_fi.FatType == 16))
-		printf("Please reboot before accessing the just-written drive.\n");
+		printf("Please reboot before accessing %s\n", strupr(argv[2]) );
 
 	return 0;
 }

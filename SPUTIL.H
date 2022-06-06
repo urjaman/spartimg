@@ -12,6 +12,9 @@ void cread(int fd, void*buf, unsigned len);
 void cwrite(int fd, void*buf, unsigned len);
 void cclose(int fd);
 
+/* Allocation helpers */
+void* cmalloc(unsigned len);
+void* ccalloc(unsigned count, unsigned sizeeach);
 
 
 #endif

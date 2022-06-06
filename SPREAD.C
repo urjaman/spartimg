@@ -10,6 +10,8 @@
 #include "sputil.h"
 #include "fatinfo.h"
 #include "blockio.h"
+#include "robustrd.h"
+#include "fatinfrr.h"
 
 void usage(const char* me)  {
 	printf("Usage: %s <DRIVE:> <FILE>\n", me);
@@ -147,8 +149,7 @@ unsigned long write_sparse_header(int fd, struct fat_info *fi) {
 	return datasectors;
 }
 
-
-void write_spdata(int fd, int drive, struct fat_info *fi, unsigned long dsects) {
+void write_spdata(int fd, struct rr_state *rr, struct fat_info *fi, unsigned long dsects) {
 	unsigned WBufSect = fat_iosize(fi);
 	struct spfmtentry e;
 	long clust = -1;
@@ -166,16 +167,15 @@ void write_spdata(int fd, int drive, struct fat_info *fi, unsigned long dsects) 
 		unsigned long i;
 		r = gen_sparse_entry(fi, &e, &clust);
 		for (i = 0; i < e.count;i += WBufSect) {
-			int rv;
 			unsigned sectors = WBufSect;
 			unsigned long left = e.count - i;
 
 			if (left < sectors)
 				sectors = left;
 
-			if ((rv = bigread(drive,e.lba + i,sectors,DatBuf)) != 0) {
-				printf("\nRead error: 0x%04X\n", rv);
-				exit(1);
+			if (rr_read(rr,e.lba + i,sectors,DatBuf) != 0) {
+				dot80 = 0;
+				nextdotsec = dsects/78;
 			}
 
 			cwrite(fd, DatBuf, sectors*512);
@@ -199,22 +199,24 @@ int main(int argc, char**argv) {
 
 	struct fat_info fi;
 	unsigned long datasectors;
-
+	struct rr_state *rr;
 	if (argc < 2) infotext();
 	if (strcmp(argv[1], "/?")==0) infotext();
 
 	drive = driveno(argv[1]);
 	if (drive < 0) usage(argv[0]);
 
-	printf("Preparing to image drive %d\n", drive);
+	printf("Preparing to image drive %c\n", 'A' + drive);
 
-	if (fat_identify(drive, &fi) != 0)
+	rr = rr_init(drive);
+
+	if (fat_identify(rr, &fi) != 0)
 		oops("Unexplained fat_identify failure");
 
 	fat_info_print(&fi);
 
 	printf("Reading FAT..\n");
-	fat_clustermap(drive, &fi);
+	fat_clustermap(rr, &fi);
 
 	if (argc < 3) {
 		printf("Dump of the sparse entries:\n");
@@ -227,7 +229,7 @@ int main(int argc, char**argv) {
 	wfd = ccreat(argv[2]);
 
 	datasectors = write_sparse_header(wfd, &fi);
-	write_spdata(wfd, drive, &fi, datasectors);
+	write_spdata(wfd, rr, &fi, datasectors);
 
 	close(wfd);
 	return 0;
